@@ -7,10 +7,16 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
     environment:
       ASPNETCORE_ENVIRONMENT: Development
       ASPNETCORE_HTTP_PORTS: 8080
       ConnectionStrings__DefaultConnection: Host=postgres;Port=5432;Database=orders-pipeline;Username=postgres;Password=postgres
+      RabbitMQ__ConnectionString: amqp://guest:guest@rabbitmq:5672/
+      RabbitMQ__ExchangeName: orders-updates
+      RabbitMQ__QueueName: orders-update
+      RabbitMQ__RoutingKey: '#'
     ports:
       - 6000:8080
 
@@ -55,7 +61,7 @@ services:
     image: debezium/server:2.7.3.Final
     container_name: Debezium
     volumes:
-      - ./.containers/debezium:/debezium/data
+      - debezium-data:/debezium/data
     depends_on:
       postgres:
         condition: service_healthy
@@ -87,5 +93,8 @@ services:
       - DEBEZIUM_SINK_RABBITMQ_CONNECTION_PORT=5672
       - DEBEZIUM_SINK_RABBITMQ_CONNECTION_USERNAME=guest
       - DEBEZIUM_SINK_RABBITMQ_CONNECTION_PASSWORD=guest
-      - DEBEZIUM_SINK_RABBITMQ_EXCHANGE_NAME=orders-updates
+      - DEBEZIUM_SINK_RABBITMQ_EXCHANGE=orders-updates
+
+volumes:
+  debezium-data:
       

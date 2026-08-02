@@ -7,6 +7,10 @@ internal sealed class OrdersDbContext(DbContextOptions<OrdersDbContext> options)
 {
     public DbSet<Product> Products => Set<Product>();
 
+    public DbSet<Order> Orders => Set<Order>();
+
+    public DbSet<OrderItem> OrderItems => Set<OrderItem>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.Entity<Product>(entity =>
@@ -66,6 +70,34 @@ internal sealed class OrdersDbContext(DbContextOptions<OrdersDbContext> options)
                     Stock = 22,
                     Supplier = "Sound World"
                 });
+        });
+
+        modelBuilder.Entity<Order>(entity =>
+        {
+            entity.ToTable("Orders");
+            entity.HasKey(order => order.Id);
+            entity.Property(order => order.Id).ValueGeneratedOnAdd();
+            entity.Property(order => order.CreatedAt).IsRequired();
+            entity.Property(order => order.UpdatedAt);
+            entity.Property(order => order.Status).IsRequired();
+        });
+
+        modelBuilder.Entity<OrderItem>(entity =>
+        {
+            entity.ToTable("OrderItems");
+            entity.HasKey(item => new { item.OrderId, item.ProductId });
+            entity.Property(item => item.Quantity).IsRequired();
+            entity.Property(item => item.UnitPrice).HasPrecision(18, 2).IsRequired();
+
+            entity.HasOne(item => item.Order)
+                .WithMany(order => order.Items)
+                .HasForeignKey(item => item.OrderId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(item => item.Product)
+                .WithMany()
+                .HasForeignKey(item => item.ProductId)
+                .OnDelete(DeleteBehavior.Restrict);
         });
     }
 }
