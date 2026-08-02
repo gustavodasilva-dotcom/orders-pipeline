@@ -1,0 +1,91 @@
+services:
+  orders.api:
+    image: ${DOCKER_REGISTRY-}ordersapi
+    build:
+      context: .
+      dockerfile: src/OrdersPipeline.Api/Dockerfile
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ASPNETCORE_HTTP_PORTS: 8080
+      ConnectionStrings__DefaultConnection: Host=postgres;Port=5432;Database=orders-pipeline;Username=postgres;Password=postgres
+    ports:
+      - 6000:8080
+
+  postgres:
+    image: postgres:latest
+    container_name: PostgreSQL
+    environment:
+      - POSTGRES_DB=orders-pipeline
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+    volumes:
+      - ./.containers/postgres:/var/lib/postgresql
+    ports:
+      - 5432:5432
+    command: ["postgres", "-c", "wal_level=logical"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d orders-pipeline"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  rabbitmq:
+    image: rabbitmq:management
+    container_name: RabbitMq
+    hostname: rabbitmq
+    volumes:
+      - ./.containers/rabbitmq/data/:/var/lib/rabbitmq
+      - ./.containers/rabbitmq/log/:/var/log/rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    ports:
+      - 15672:15672
+      - 5672:5672
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  debezium:
+    image: debezium/server:2.7.3.Final
+    container_name: Debezium
+    volumes:
+      - ./.containers/debezium:/debezium/data
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    environment:
+      # Debezium configuration
+      - DEBEZIUM_SERVER_NAME=debezium-server
+      - DEBEZIUM_SOURCE_OFFSET_STORAGE_FILE_FILENAME=/debezium/data/offsets.dat
+      - DEBEZIUM_SOURCE_OFFSET_FLUSH_INTERVAL_MS=60000
+      - DEBEZIUM_SOURCE_TOMBSTONE_ON_DELETE=false
+      - QUARKUS_LOG_CONSOLE_JSON=false
+
+      # PostgreSQL source configuration
+      - DEBEZIUM_SOURCE_CONNECTOR_CLASS=io.debezium.connector.postgresql.PostgresConnector
+      - DEBEZIUM_SOURCE_PLUGIN_NAME=pgoutput
+      - DEBEZIUM_SOURCE_DATABASE_HOSTNAME=postgres
+      - DEBEZIUM_SOURCE_DATABASE_PORT=5432
+      - DEBEZIUM_SOURCE_DATABASE_USER=postgres
+      - DEBEZIUM_SOURCE_DATABASE_PASSWORD=postgres
+      - DEBEZIUM_SOURCE_DATABASE_DBNAME=orders-pipeline
+      - DEBEZIUM_SOURCE_SCHEMA_INCLUDE_LIST=public
+      - DEBEZIUM_SOURCE_TABLE_INCLUDE_LIST=public.Orders
+      - DEBEZIUM_SOURCE_TOPIC_PREFIX=orders
+
+      # RabbitMQ sink configuration
+      - DEBEZIUM_SINK_TYPE=rabbitmq
+      - DEBEZIUM_SINK_RABBITMQ_CONNECTION_HOST=rabbitmq
+      - DEBEZIUM_SINK_RABBITMQ_CONNECTION_PORT=5672
+      - DEBEZIUM_SINK_RABBITMQ_CONNECTION_USERNAME=guest
+      - DEBEZIUM_SINK_RABBITMQ_CONNECTION_PASSWORD=guest
+      - DEBEZIUM_SINK_RABBITMQ_EXCHANGE_NAME=orders-updates
+      
