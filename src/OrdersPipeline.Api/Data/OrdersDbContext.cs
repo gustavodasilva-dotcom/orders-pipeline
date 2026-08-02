@@ -11,11 +11,15 @@ internal sealed class OrdersDbContext(DbContextOptions<OrdersDbContext> options)
 
     public DbSet<OrderItem> OrderItems => Set<OrderItem>();
 
+    public DbSet<StockEntry> StockEntries => Set<StockEntry>();
+
+    public DbSet<OrderStockEntry> OrderStockEntries => Set<OrderStockEntry>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.Entity<Product>(entity =>
         {
-            entity.ToTable("Products");
+            entity.ToTable(DatabaseTableNames.Products);
             entity.HasKey(product => product.Id);
             entity.Property(product => product.Id).ValueGeneratedOnAdd();
             entity.Property(product => product.Name).HasMaxLength(200).IsRequired();
@@ -74,7 +78,7 @@ internal sealed class OrdersDbContext(DbContextOptions<OrdersDbContext> options)
 
         modelBuilder.Entity<Order>(entity =>
         {
-            entity.ToTable("Orders");
+            entity.ToTable(DatabaseTableNames.Orders);
             entity.HasKey(order => order.Id);
             entity.Property(order => order.Id).ValueGeneratedOnAdd();
             entity.Property(order => order.CreatedAt).IsRequired();
@@ -84,7 +88,7 @@ internal sealed class OrdersDbContext(DbContextOptions<OrdersDbContext> options)
 
         modelBuilder.Entity<OrderItem>(entity =>
         {
-            entity.ToTable("OrderItems");
+            entity.ToTable(DatabaseTableNames.OrderItems);
             entity.HasKey(item => new { item.OrderId, item.ProductId });
             entity.Property(item => item.Quantity).IsRequired();
             entity.Property(item => item.UnitPrice).HasPrecision(18, 2).IsRequired();
@@ -98,6 +102,38 @@ internal sealed class OrdersDbContext(DbContextOptions<OrdersDbContext> options)
                 .WithMany()
                 .HasForeignKey(item => item.ProductId)
                 .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<StockEntry>(entity =>
+        {
+            entity.ToTable(DatabaseTableNames.StockEntries);
+            entity.HasKey(stockEntry => stockEntry.Id);
+            entity.Property(stockEntry => stockEntry.Id).ValueGeneratedOnAdd();
+            entity.Property(stockEntry => stockEntry.Quantity).IsRequired();
+            entity.Property(stockEntry => stockEntry.CreatedAt).IsRequired();
+            entity.Property(stockEntry => stockEntry.SourceEventId).HasMaxLength(200).IsRequired();
+            entity.HasIndex(stockEntry => stockEntry.SourceEventId).IsUnique();
+
+            entity.HasOne(stockEntry => stockEntry.Product)
+                .WithMany()
+                .HasForeignKey(stockEntry => stockEntry.ProductId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<OrderStockEntry>(entity =>
+        {
+            entity.ToTable(DatabaseTableNames.OrderStockEntries);
+            entity.HasKey(link => new { link.OrderId, link.StockEntryId });
+
+            entity.HasOne(link => link.Order)
+                .WithMany()
+                .HasForeignKey(link => link.OrderId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(link => link.StockEntry)
+                .WithMany(stockEntry => stockEntry.Orders)
+                .HasForeignKey(link => link.StockEntryId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
     }
 }

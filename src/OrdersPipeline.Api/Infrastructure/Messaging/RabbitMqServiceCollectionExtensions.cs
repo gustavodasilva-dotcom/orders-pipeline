@@ -10,7 +10,7 @@ internal static class RabbitMqServiceCollectionExtensions
             .Bind(configuration.GetRequiredSection("RabbitMQ"))
             .ValidateDataAnnotations()
             .ValidateOnStart();
-        services.AddHostedService<RabbitMqDebeziumConsumer>();
+        services.AddHostedService<OrdersDebeziumEventConsumer>();
 
         return services;
     }
